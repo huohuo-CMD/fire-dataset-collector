@@ -1,0 +1,32 @@
+# GitHub Actions
+action/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 数据集（通过 LFS 管理）
+# dataset/
+# 注意: dataset/ 目录通过 git add dataset/ 提交
+# 建议使用 Git LFS: git lfs track "dataset/**/*.jpg"
+
+# 日志
+logs/*.log
+
+# 临时文件
+*.tmp
+.DS_Store
+Thumbs.db
