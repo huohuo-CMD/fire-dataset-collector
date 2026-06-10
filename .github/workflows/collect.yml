@@ -4,19 +4,15 @@ on:
   # 每天 UTC 0:00 自动运行
   schedule:
     - cron: '0 0 * * *'
-  # 手动触发
+  # 每次 push 到 main 分支自动运行
+  push:
+    branches:
+      - main
+  # 手动触发（默认运行全部）
   workflow_dispatch:
-    inputs:
-      categories:
-        description: '要采集的类别'
-        required: false
-        default: 'all'
-      max_per_keyword:
-        description: '每个关键词采集数量'
-        required: false
-        default: '500'
 
 jobs:
+  # 主采集任务
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 350
