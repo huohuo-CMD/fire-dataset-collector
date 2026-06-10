@@ -18,6 +18,7 @@ from config import BASE_DIR, CATEGORIES, STATS_FILE, MIN_IMAGE_SIZE, MAX_PER_KEY
 from src.utils import safe_filename, is_valid_image, get_image_hash, sleep_random, count_images_in_dir
 from src.baidu_scraper import BaiduScraper
 from src.bing_scraper import BingScraper
+from src.multi_scraper import MultiSourceDownloader
 
 
 class DatasetCollector:
@@ -26,6 +27,7 @@ class DatasetCollector:
     def __init__(self):
         self.baidu = BaiduScraper()
         self.bing = BingScraper()
+        self.multi = MultiSourceDownloader()
         self.session_hashes = set()  # 去重
         self.stats = {
             'start_time': datetime.now().isoformat(),
@@ -33,6 +35,7 @@ class DatasetCollector:
             'categories': {},
             'keywords': {}
         }
+        self.deadline = time.time() + 350 * 60 - 30  # 提前 30 秒结束
 
     def save_stats(self):
         """保存统计信息"""
@@ -76,18 +79,24 @@ class DatasetCollector:
             print(f"    保存失败: {e}")
             return False
 
-    def process_keyword(self, category: str, folder_name: str, keyword: str, save_dir: Path, target: int = 200) -> dict:
+    def process_keyword(self, category: str, folder_name: str, keyword: str, save_dir: Path, target: int = 800) -> dict:
         """处理单个关键词"""
         print(f"\n  [{folder_name}] {keyword}")
 
-        # 收集 URL
-        baidu_urls = self.baidu.collect_urls(keyword, max_pages=15, max_urls=MAX_PER_KEYWORD)
+        # 多源收集 URL（百度 + Bing + Google + Yahoo）
+        baidu_urls = self.baidu.collect_urls(keyword, max_pages=20, max_urls=1000)
         sleep_random(1, 2)
 
-        bing_urls = self.bing.collect_urls(keyword, max_pages=10, max_urls=200)
+        bing_urls = self.bing.collect_urls(keyword, max_pages=15, max_urls=500)
         sleep_random(1, 2)
 
-        all_urls = list(dict.fromkeys(baidu_urls + bing_urls))
+        # 多源补充
+        try:
+            extra_urls = self.multi.collect_from_all(keyword)
+        except:
+            extra_urls = []
+
+        all_urls = list(dict.fromkeys(baidu_urls + bing_urls + extra_urls))
         print(f"    共获取 {len(all_urls)} 个 URL")
 
         # 下载
@@ -96,17 +105,22 @@ class DatasetCollector:
 
         downloaded = 0
         for i, url in enumerate(all_urls):
+            # 检查时间
+            if time.time() > self.deadline:
+                print(f"    时间到，停止采集")
+                break
+
             if self.download_single_image(url, folder_name, keyword, save_path, i):
                 downloaded += 1
 
             if downloaded >= target:
                 break
 
-            if i % 10 == 0:
+            if i % 50 == 0:
                 print(f"    进度: {downloaded}/{target}")
                 sys.stdout.flush()
 
-            sleep_random(0.2, 0.5)
+            sleep_random(0.1, 0.3)
 
         print(f"    完成: {downloaded} 张")
 

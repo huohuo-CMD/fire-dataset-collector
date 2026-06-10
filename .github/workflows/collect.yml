@@ -102,17 +102,23 @@ jobs:
             git lfs push origin main
           fi
 
-  # 并行采集任务 - 加速采集
+  # 并行采集任务 - 10 路同时采集
   collect_parallel:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     strategy:
       matrix:
         category:
+          - data_center_fire
+          - wire_aging
           - battery_failure
           - smoke
           - equipment_overheat
           - electric_arc
+          - normal_light
+          - normal_device
+          - static_discharge
+          - sunlight_reflection
 
     steps:
       - uses: actions/checkout@v4
