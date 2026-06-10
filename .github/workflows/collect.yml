@@ -8,13 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       categories:
-        description: '要采集的类别 (all/positive/negative，或指定如 data_center_fire,smoke)'
+        description: '要采集的类别'
         required: false
         default: 'all'
       max_per_keyword:
         description: '每个关键词采集数量'
         required: false
-        default: '300'
+        default: '500'
 
 jobs:
   collect:
@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: 检出新仓库
         uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: 设置 Python
         uses: actions/setup-python@v5
@@ -34,38 +36,34 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: 配置 Git LFS
+        run: |
+          git lfs install
+          git lfs track "dataset/**/*.jpg"
+          git lfs track "dataset/**/*.png"
+
       - name: 配置 Git
         run: |
           git config user.name "Dataset Collector"
           git config user.email "collector@github.com"
 
-      - name: 初始化子模块（如果需要）
-        run: |
-          git submodule update --init --recursive || true
-
       - name: 统计现有数据
-        id: stats_before
         run: |
           echo "采集前统计:"
-          if [ -d "dataset" ]; then
-            find dataset -name "*.jpg" -o -name "*.png" | wc -l || echo "0"
-          else
-            echo "0"
-          fi
+          find dataset -name "*.jpg" -o -name "*.png" 2>/dev/null | wc -l || echo "0"
 
       - name: 运行采集脚本
-        id: collect
         run: |
           echo "开始采集..."
           python src/collector.py
 
       - name: 统计采集后数据
-        id: stats_after
         run: |
-          echo "采集后统计:"
+          echo ""
+          echo "=== 采集后统计 ==="
           TOTAL=$(find dataset -name "*.jpg" -o -name "*.png" 2>/dev/null | wc -l)
+          echo "总计: $TOTAL 张图片"
           echo "total=$TOTAL" >> $GITHUB_OUTPUT
-          echo "本次新增: $TOTAL 张图片"
 
       - name: 统计各类别
         run: |
@@ -86,58 +84,75 @@ jobs:
 
       - name: 提交数据
         run: |
-          # 添加所有文件
-          git add dataset/ logs/ src/ config.py
+          # LFS 推送
+          git add .gitattributes
+          git lfs ls-files
+
+          # 添加数据
+          git add dataset/ logs/
           git status
 
           # 检查是否有变更
-          if git diff --cached --quiet; then
+          if git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
             echo "没有新数据需要提交"
           else
-            echo "提交数据..."
-            git commit -m "数据更新 $(date +'%Y-%m-%d %H:%M')" || true
-            git push origin main || echo "推送失败（可能没有权限）"
+            echo "提交并推送..."
+            git commit -m "数据更新 $(date +'%Y-%m-%d %H:%M')"
+            git push origin main
+            git lfs push origin main
           fi
 
-      - name: 上传数据集到 LFS
-        if: steps.stats_after.outputs.total > 0
-        run: |
-          # 跟踪大文件
-          git lfs track "dataset/**/*.jpg"
-          git lfs track "dataset/**/*.png"
-          git add .gitattributes
-          git commit -m "配置 LFS" || true
-          git push origin main || true
-
-  # 批量采集任务 - 分散到多天
-  collect_batch_1:
+  # 并行采集任务 - 加速采集
+  collect_parallel:
     runs-on: ubuntu-latest
     timeout-minutes: 350
-    if: false  # 禁用，需要时手动开启
     strategy:
       matrix:
         category:
-          - data_center_fire
-          - wire_aging
+          - battery_failure
+          - smoke
+          - equipment_overheat
+          - electric_arc
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - name: 采集正样本
+
+      - run: |
+          pip install -r requirements.txt
+          git lfs install
+          git lfs track "dataset/**/*.jpg"
+          git lfs track "dataset/**/*.png"
+
+      - name: 采集指定类别
         run: |
           python -c "
           import sys
           sys.path.insert(0, 'src')
           from collector import DatasetCollector
+          from config import CATEGORIES
+
           collector = DatasetCollector()
-          # 只采集指定类别
-          print('采集 ${{ matrix.category }}')
+          category = '${{ matrix.category }}'
+
+          # 查找类别所在
+          for ctype, categories in CATEGORIES.items():
+              if category in categories:
+                  info = categories[category]
+                  result = collector.process_category(category, info, ctype)
+                  print(f'完成: {category}')
+                  break
           "
-      - name: 提交
+
+      - name: 提交数据
         run: |
-          git add dataset/
-          git commit -m "批量更新 ${{ matrix.category }}" || true
-          git push || true
+          git config user.name "Dataset Collector"
+          git config user.email "collector@github.com"
+          git add .gitattributes dataset/
+          git commit -m "并行采集: ${{ matrix.category }}" || true
+          git push origin main || true
