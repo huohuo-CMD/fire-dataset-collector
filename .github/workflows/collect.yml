@@ -55,7 +55,7 @@ jobs:
       - name: 运行采集脚本
         run: |
           echo "开始采集..."
-          python src/collector.py
+          cd src && python collector.py
 
       - name: 统计采集后数据
         run: |
@@ -139,8 +139,8 @@ jobs:
         run: |
           python -c "
           import sys
-          sys.path.insert(0, 'src')
-          from collector import DatasetCollector
+          sys.path.insert(0, '.')
+          from src.collector import DatasetCollector
           from config import CATEGORIES
 
           collector = DatasetCollector()

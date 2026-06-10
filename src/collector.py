@@ -11,7 +11,9 @@ import random
 from pathlib import Path
 from datetime import datetime
 
-# 添加 src 目录到路径
+# 添加父目录和当前目录到路径
+BASE_PATH = Path(__file__).parent.parent
+sys.path.insert(0, str(BASE_PATH))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import BASE_DIR, CATEGORIES, STATS_FILE, MIN_IMAGE_SIZE, MAX_PER_KEYWORD
