@@ -81,16 +81,16 @@ class DatasetCollector:
             print(f"    保存失败: {e}")
             return False
 
-    def process_keyword(self, category: str, folder_name: str, keyword: str, save_dir: Path, target: int = 800) -> dict:
+    def process_keyword(self, category: str, folder_name: str, keyword: str, save_dir: Path, target: int = 300) -> dict:
         """处理单个关键词"""
         print(f"\n  [{folder_name}] {keyword}")
 
         # 多源收集 URL（百度 + Bing + Google + Yahoo）
-        baidu_urls = self.baidu.collect_urls(keyword, max_pages=20, max_urls=1000)
-        sleep_random(1, 2)
+        baidu_urls = self.baidu.collect_urls(keyword, max_pages=10, max_urls=500)
+        sleep_random(0.5, 1)
 
-        bing_urls = self.bing.collect_urls(keyword, max_pages=15, max_urls=500)
-        sleep_random(1, 2)
+        bing_urls = self.bing.collect_urls(keyword, max_pages=8, max_urls=300)
+        sleep_random(0.5, 1)
 
         # 多源补充
         try:
@@ -118,11 +118,11 @@ class DatasetCollector:
             if downloaded >= target:
                 break
 
-            if i % 50 == 0:
+            if i % 20 == 0:
                 print(f"    进度: {downloaded}/{target}")
                 sys.stdout.flush()
 
-            sleep_random(0.1, 0.3)
+            sleep_random(0.05, 0.15)  # 快速采集
 
         print(f"    完成: {downloaded} 张")
 
