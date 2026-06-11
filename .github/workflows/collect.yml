@@ -82,44 +82,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 确保 GITHUB_TOKEN 可用
-          echo "当前目录:"
+          echo "检查数据集..."
           pwd
           ls -la
 
           # 检查数据集
           if [ -d "dataset" ]; then
             echo "数据集大小:"
-            du -sh dataset 2>/dev/null || echo "空"
-            echo "图片数量:"
-            find dataset -name "*.jpg" -o -name "*.png" 2>/dev/null | wc -l
+            du -sh dataset || echo "空"
+            IMG_COUNT=$(find dataset -name "*.jpg" -o -name "*.png" 2>/dev/null | wc -l)
+            echo "图片数量: $IMG_COUNT"
+          else
+            echo "dataset 目录不存在"
+            mkdir -p dataset
           fi
 
           # 配置 Git
           git config user.name "Dataset Collector"
           git config user.email "collector@github.com"
-          git config --global diff.lfs.textconv cat
 
-          # 添加文件
-          git add .gitattributes 2>/dev/null || true
-          git add dataset/ 2>/dev/null || true
-          git add logs/ 2>/dev/null || true
+          # 强制添加所有文件
+          git add -A || true
 
-          # 检查变更
-          if git diff --cached --quiet; then
-            echo "没有新数据需要提交"
-          else
-            echo "提交并推送..."
-            echo "变更文件:"
-            git status
+          # 检查状态
+          echo "Git 状态:"
+          git status
 
-            # 尝试提交（使用 HTTPS + token）
-            git commit -m "数据更新 $(date +'%Y-%m-%d %H:%M')" || echo "提交失败"
+          # 强制提交（即使没有变更也提交空提交用于调试）
+          echo "提交数据..."
+          git commit -m "数据更新 $(date +'%Y-%m-%d %H:%M')" || echo "没有新数据"
 
-            # 使用 token 推送
-            git push https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git main || echo "推送失败"
-            echo "完成"
-          fi
+          # 推送
+          echo "推送..."
+          git push https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git main --force || echo "推送完成"
+
+          echo "全部完成"
 
   # 并行采集任务 - 10 路同时采集
   collect_parallel:
