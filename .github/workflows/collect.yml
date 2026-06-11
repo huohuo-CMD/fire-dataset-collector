@@ -79,23 +79,46 @@ jobs:
           done
 
       - name: 提交数据
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # LFS 推送
-          git add .gitattributes
-          git lfs ls-files
+          # 确保 GITHUB_TOKEN 可用
+          echo "当前目录:"
+          pwd
+          ls -la
 
-          # 添加数据
-          git add dataset/ logs/
-          git status
+          # 检查数据集
+          if [ -d "dataset" ]; then
+            echo "数据集大小:"
+            du -sh dataset 2>/dev/null || echo "空"
+            echo "图片数量:"
+            find dataset -name "*.jpg" -o -name "*.png" 2>/dev/null | wc -l
+          fi
 
-          # 检查是否有变更
-          if git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+          # 配置 Git
+          git config user.name "Dataset Collector"
+          git config user.email "collector@github.com"
+          git config --global diff.lfs.textconv cat
+
+          # 添加文件
+          git add .gitattributes 2>/dev/null || true
+          git add dataset/ 2>/dev/null || true
+          git add logs/ 2>/dev/null || true
+
+          # 检查变更
+          if git diff --cached --quiet; then
             echo "没有新数据需要提交"
           else
             echo "提交并推送..."
-            git commit -m "数据更新 $(date +'%Y-%m-%d %H:%M')"
-            git push origin main
-            git lfs push origin main
+            echo "变更文件:"
+            git status
+
+            # 尝试提交（使用 HTTPS + token）
+            git commit -m "数据更新 $(date +'%Y-%m-%d %H:%M')" || echo "提交失败"
+
+            # 使用 token 推送
+            git push https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git main || echo "推送失败"
+            echo "完成"
           fi
 
   # 并行采集任务 - 10 路同时采集
@@ -152,9 +175,20 @@ jobs:
           "
 
       - name: 提交数据
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "Dataset Collector"
           git config user.email "collector@github.com"
-          git add .gitattributes dataset/
-          git commit -m "并行采集: ${{ matrix.category }}" || true
-          git push origin main || true
+
+          # 添加文件
+          git add .gitattributes dataset/ || true
+
+          # 检查变更
+          if git diff --cached --quiet; then
+            echo "没有新数据"
+          else
+            echo "提交..."
+            git commit -m "并行采集: ${{ matrix.category }}" || echo "提交失败"
+            git push https://x-access-token:$GITHUB_TOKEN@github.com/$GITHUB_REPOSITORY.git main || echo "推送失败"
+          fi
